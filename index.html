@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-white text-slate-800">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INTEDI QR</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- html5-qrcode Library -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <!-- Google Font Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Ajuste de video de la cámara */
+        #qr-reader video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+            border-radius: 1rem;
+        }
+        #qr-reader {
+            border: none !important;
+        }
+
+        /* Animación de escaneo con línea roja */
+        @keyframes scan-line {
+            0% { top: 5%; opacity: 0.8; }
+            50% { opacity: 1; }
+            100% { top: 90%; opacity: 0.8; }
+        }
+        .scanner-line {
+            position: absolute;
+            left: 5%;
+            width: 90%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, rgb(224, 0, 24), transparent);
+            box-shadow: 0 0 15px rgb(224, 0, 24);
+            animation: scan-line 2.2s infinite ease-in-out;
+        }
+
+        /* Clases para logos */
+        .header-logo-img {
+            height: 48px;
+            width: auto;
+            object-fit: contain;
+        }
+        .start-logo-img {
+            height: 75px;
+            width: auto;
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen bg-white text-slate-800 antialiased selection:bg-red-600 selection:text-white">
+
+    <!-- Header simple -->
+    <header class="py-4 px-6 border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-md mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-2.5">
+                <img src="LOGO INTEDI.png" alt="INTEDI QR" class="header-logo-img">
+            </div>
+            <div id="status-badge" class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                <span class="w-2 h-2 rounded-full bg-slate-400" id="status-dot"></span>
+                <span id="status-text">Listo</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Contenido Principal -->
+    <main class="flex-1 max-w-md w-full mx-auto p-4 flex flex-col justify-between space-y-4">
+
+        <!-- Notificación Toast -->
+        <div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 bg-[rgb(224,0,24)] text-white px-4 py-2 rounded-xl shadow-2xl text-xs font-semibold flex items-center space-x-2 z-50 transition-all">
+            <i id="toast-icon" class="fa-solid fa-check"></i>
+            <span id="toast-msg"></span>
+        </div>
+
+        <!-- Visor de Cámara / Escáner -->
+        <div class="relative w-full aspect-square bg-slate-100 rounded-3xl border-2 border-slate-200 overflow-hidden shadow-xl flex flex-col items-center justify-center">
+            
+            <!-- Contenedor del video HTML5QR -->
+            <div id="qr-reader" class="w-full h-full"></div>
+
+            <!-- Línea animada de escaneo (Roja) -->
+            <div id="scan-overlay-line" class="hidden scanner-line z-20 pointer-events-none"></div>
+
+            <!-- Pantalla inicial de bienvenida / permiso -->
+            <div id="start-overlay" class="absolute inset-0 bg-white flex flex-col items-center justify-center p-6 text-center z-30 space-y-4">
+                <div class="flex items-center justify-center mb-2">
+                    <img src="PRI.png" alt="PRI" class="start-logo-img">
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-slate-900">Lector Directo de QR</h2>
+                    <p class="text-xs text-slate-500 mt-1.5 max-w-xs leading-relaxed">
+                        Presiona el botón para activar la cámara y leer cualquier código QR de forma instantánea.
+                    </p>
+                </div>
+                <button onclick="startScanner()" class="w-full py-3.5 px-6 rounded-2xl bg-[rgb(224,0,24)] hover:bg-[rgb(180,0,18)] text-white font-bold text-sm transition-all duration-200 shadow-lg shadow-red-600/20 flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-bolt"></i>
+                    <span>Activar Cámara</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Botones de Control de Cámara -->
+        <div id="controls-bar" class="hidden flex items-center gap-2">
+            <button id="btn-toggle-cam" onclick="stopScanner()" class="flex-1 py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-semibold text-xs transition flex items-center justify-center space-x-2">
+                <i class="fa-solid fa-power-off text-rose-500"></i>
+                <span>Detener Cámara</span>
+            </button>
+            
+            <button id="btn-torch" onclick="toggleTorch()" class="hidden py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-amber-600 border border-slate-200 font-semibold text-xs transition flex items-center justify-center space-x-1.5">
+                <i id="torch-icon" class="fa-solid fa-bolt"></i>
+            </button>
+        </div>
+
+        <!-- TARJETA DE RESULTADO PROMINENTE CON BORDES ROJOS -->
+        <div id="result-card" class="hidden bg-white border-2 border-[rgb(224,0,24)] rounded-3xl p-5 shadow-2xl space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center space-x-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-[rgb(224,0,24)] animate-ping"></span>
+                    <span class="text-xs uppercase font-extrabold tracking-wider text-[rgb(224,0,24)]">¡Código Detectado!</span>
+                </div>
+                <button onclick="dismissResult()" class="text-slate-400 hover:text-slate-600 text-sm p-1">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Texto escaneado -->
+            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <p id="result-content" class="text-sm font-medium text-slate-800 break-all max-h-40 overflow-y-auto font-mono leading-relaxed select-all"></p>
+            </div>
+
+            <!-- Acción directa centrada -->
+            <div class="flex justify-center">
+                <button onclick="sendToGoogleSheet()" class="w-full py-3 px-4 rounded-xl bg-[rgb(224,0,24)] hover:bg-[rgb(180,0,18)] text-white font-bold text-xs transition flex items-center justify-center space-x-2 shadow-lg shadow-red-600/20">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <span>Capturar información</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- RECUADRO GRANDE VERDE DE ÉXITO (#29AB87) SIN X -->
+        <div id="success-overlay" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in duration-200">
+            <div class="w-full max-w-sm bg-[#29AB87] text-white rounded-3xl p-8 shadow-2xl flex flex-col items-center text-center space-y-4 scale-100 transition-transform">
+                <div class="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center text-4xl mb-1 mt-2">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <h2 class="text-2xl font-extrabold tracking-wide uppercase">¡INFORMACIÓN CAPTURADA!</h2>
+                <p class="text-sm text-emerald-50 font-medium">Los datos se han guardado correctamente en el sistema.</p>
+                
+                <button onclick="closeSuccessOverlay()" class="w-full py-3 px-4 rounded-xl bg-white text-[#29AB87] font-bold text-xs transition shadow-md hover:bg-emerald-50 mt-2">
+                    Continuar Escaneando
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="py-3 text-center text-[11px] text-slate-400">
+        INTEDI QR
+    </footer>
+
+    <!-- Lógica JavaScript -->
+    <script>
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyN6D8OoEisz2cIEJEtHdtxsAv2PcvntlLSZa_4sigDSsklvoCkQbisHS9PpxSJkYW2/exec";
+
+        let html5QrCode = null;
+        let isScanning = false;
+        let currentResult = '';
+        let torchActive = false;
+
+        // Inicializamos únicamente la librería al cargar la página sin activar la cámara aún
+        window.addEventListener('load', () => {
+            html5QrCode = new Html5Qrcode("qr-reader");
+        });
+
+        async function startScanner() {
+            try {
+                // Si ya había una instancia corriendo, la detenemos de forma segura
+                if (isScanning && html5QrCode) {
+                    await html5QrCode.stop().catch(() => {});
+                    isScanning = false;
+                }
+
+                const devices = await Html5Qrcode.getCameras();
+                if (!devices || devices.length === 0) {
+                    showToast("No se encontró ninguna cámara en el dispositivo", true);
+                    return;
+                }
+
+                const backCam = devices.find(d => 
+                    d.label.toLowerCase().includes('back') || 
+                    d.label.toLowerCase().includes('trasera') || 
+                    d.label.toLowerCase().includes('environment')
+                ) || devices[devices.length - 1];
+
+                const cameraId = backCam ? backCam.id : devices[0].id;
+
+                const config = {
+                    fps: 15,
+                    qrbox: (viewWidth, viewHeight) => {
+                        const minDim = Math.min(viewWidth, viewHeight);
+                        return { width: Math.floor(minDim * 0.75), height: Math.floor(minDim * 0.75) };
+                    }
+                };
+
+                await html5QrCode.start(cameraId, config, onScanSuccess, () => {});
+
+                isScanning = true;
+                document.getElementById('start-overlay').classList.add('hidden');
+                document.getElementById('scan-overlay-line').classList.remove('hidden');
+                document.getElementById('controls-bar').classList.remove('hidden');
+
+                updateStatus(true);
+                checkTorch();
+
+            } catch (err) {
+                console.error("Error al iniciar cámara:", err);
+                isScanning = false;
+                document.getElementById('start-overlay').classList.remove('hidden');
+                showToast("Por favor otorga permisos de acceso a la cámara", true);
+            }
+        }
+
+        async function stopScanner() {
+            if (html5QrCode && isScanning) {
+                try {
+                    await html5QrCode.stop();
+                } catch (e) {
+                    console.warn(e);
+                }
+                isScanning = false;
+                document.getElementById('start-overlay').classList.remove('hidden');
+                document.getElementById('scan-overlay-line').classList.add('hidden');
+                document.getElementById('controls-bar').classList.add('hidden');
+                updateStatus(false);
+            }
+        }
+
+        function onScanSuccess(decodedText) {
+            currentResult = decodedText;
+            if (navigator.vibrate) navigator.vibrate(100);
+
+            const resultContent = document.getElementById('result-content');
+            const resultCard = document.getElementById('result-card');
+
+            resultContent.innerText = decodedText;
+            resultCard.classList.remove('hidden');
+            resultCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+
+        function dismissResult() {
+            document.getElementById('result-card').classList.add('hidden');
+        }
+
+        async function sendToGoogleSheet() {
+            if (!currentResult) return;
+
+            try {
+                const successOverlay = document.getElementById('success-overlay');
+                successOverlay.classList.remove('hidden');
+
+                const urlWithData = `${WEB_APP_URL}?data=${encodeURIComponent(currentResult)}`;
+                
+                await fetch(urlWithData, {
+                    method: 'GET',
+                    mode: 'no-cors'
+                });
+
+            } catch (error) {
+                console.error("Error al enviar:", error);
+                document.getElementById('success-overlay').classList.add('hidden');
+                showToast("Error al guardar en Google Sheet", true);
+            }
+        }
+
+        function closeSuccessOverlay() {
+            document.getElementById('success-overlay').classList.add('hidden');
+            dismissResult();
+        }
+
+        function checkTorch() {
+            try {
+                const capabilities = html5QrCode.getRunningTrackCapabilities();
+                const btnTorch = document.getElementById('btn-torch');
+                if (capabilities && capabilities.torch) {
+                    btnTorch.classList.remove('hidden');
+                } else {
+                    btnTorch.classList.add('hidden');
+                }
+            } catch (e) {
+                document.getElementById('btn-torch').classList.add('hidden');
+            }
+        }
+
+        async function toggleTorch() {
+            try {
+                torchActive = !torchActive;
+                await html5QrCode.applyVideoConstraints({
+                    advanced: [{ torch: torchActive }]
+                });
+                const btnTorch = document.getElementById('btn-torch');
+                btnTorch.classList.toggle('bg-amber-100', torchActive);
+            } catch (err) {
+                showToast("Linterna no disponible", true);
+            }
+        }
+
+        function updateStatus(active) {
+            const dot = document.getElementById('status-dot');
+            const text = document.getElementById('status-text');
+            if (active) {
+                dot.className = "w-2 h-2 rounded-full bg-[rgb(224,0,24)] animate-pulse";
+                text.innerText = "Escaneando";
+            } else {
+                dot.className = "w-2 h-2 rounded-full bg-slate-400";
+                text.innerText = "Detenido";
+            }
+        }
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toast-msg');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastMsg.innerText = msg;
+            toastIcon.className = isError ? "fa-solid fa-triangle-exclamation" : "fa-solid fa-check";
+            toast.className = `fixed top-20 left-1/2 -translate-x-1/2 ${isError ? 'bg-rose-600' : 'bg-[rgb(224,0,24)]'} text-white px-4 py-2 rounded-xl shadow-2xl text-xs font-semibold flex items-center space-x-2 z-50 transition-all`;
+
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 2500);
+        }
+    </script>
+</body>
+</html>
